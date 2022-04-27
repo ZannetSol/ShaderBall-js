@@ -1,0 +1,248 @@
+
+<style>
+    * {
+    margin: 0;
+    padding: 0;
+  }
+  
+  html {
+    height: 100%;
+    background-color: #000; 
+  }
+  
+  body {  
+    margin: 0;
+    height: 100%;
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+
+  #myCanvas {
+    overflow: hidden;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;  
+  }
+  #myCanvas canvas {  
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <div id="myCanvas"></div>
+
+		<script id="fragmentShader" type="x-shader/x-fragment">
+
+			uniform float time;
+
+			varying vec2 vUv;
+
+			float snow(vec2 uv,float scale)
+			{
+				float _t = time*0.1;
+				uv.x+=_t/scale;
+
+				uv*=scale;
+			  vec2 s=floor(uv);
+			  vec2 f=fract(uv);
+			  vec2 p;
+			  float k=40.;
+			  float d;
+				p=sin(11.*fract(sin((s+p+scale)*mat2(7,3,6,5))*5.))-f;
+			  d=length(p);
+			  k=min(d,k);
+				k=smoothstep(0.,k,sin(f.x+f.y)*0.006); // particleの大きさ
+			  return k;
+			}
+
+			void main(void) {
+
+				vec2 uv = - 1.0 + 2.0 * vUv;
+				uv.x += sin(uv.x*0.1+time*0.01);
+			  uv.x *= 0.01;
+				uv.y += sin(time*0.01);
+				float c=0.0;
+				for(float i = 0.0; i < 10.0; i++){
+					uv.x += i*0.01;
+					c+=snow(uv,i*2.0);
+				}
+
+				vec3 finalColor=(vec3(uv.x,uv.y,0.9))*c*50.0;
+				gl_FragColor = vec4(finalColor,1);
+
+        
+			}
+
+		</script>
+
+		<script id="vertexShader" type="x-shader/x-vertex">
+
+			varying vec2 vUv;
+
+			void main()
+			{
+				vUv = uv;
+				vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
+				gl_Position = projectionMatrix * mvPosition;
+			}
+
+		</script>
+
+
+<script>
+class Canvas {
+  constructor() {
+
+ 
+
+    
+    this.scrollY = 0;
+    this.mouse = new THREE.Vector2(0, 0);
+    //ウィンドウサイズ
+    this.w = window.innerWidth;
+    this.h = window.innerHeight;
+
+
+
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true
+    });
+    this.renderer.setSize(this.w, this.h);
+    this.renderer.setPixelRatio(window.devicePixelRatio)
+    this.renderer.setClearColor( 0x0b0115 );
+
+    const container = document.getElementById("myCanvas");
+    container.appendChild(this.renderer.domElement);
+
+ 
+    const fov    = 50;
+    const fovRad = (fov / 2) * (Math.PI / 180);
+    const dist   = (this.h / 2) / Math.tan(fovRad);
+    /* */
+    this.camera = new THREE.PerspectiveCamera(fov, this.w / this.h, 1, dist * 2);
+    this.camera.position.z = dist;
+    
+
+    this.scene = new THREE.Scene();
+
+    this.pointLight = new THREE.PointLight(0xffffff);
+    this.pointLight.position.set(40, 40, 0);
+    this.scene.add(this.pointLight);
+
+    this.ambientLight = new THREE.AmbientLight(0xFFFFFF, 0.9);
+    this.scene.add(this.ambientLight);
+
+    //uniform
+    this.uniforms = {
+      "time": { value: 1.0 },
+      "resolution": { type: "v2", value: new THREE.Vector2(this.renderer.domElement.width,this.renderer.domElement.height) }
+    };
+
+
+    this.meshList = [];
+    for(let i = 0; i< 50; i++){
+      this.mesh = new Donuts(60,this.uniforms); 
+      this.mesh.position.set(
+        getRandom(-this.w/2,this.w/2),
+        getRandom(-this.h/2,this.h/2),
+        getRandom(-this.h/4,this.h/2)
+      );
+      this.meshList.push(this.mesh);
+      this.scene.add(this.mesh);
+    }
+
+   
+    this.renderer.render(this.scene, this.camera);
+    this.render();
+  }
+
+  render() {
+
+    requestAnimationFrame(() => { this.render(); });
+    const sec = performance.now() / 1000;
+
+    for(let i = 0; i < this.meshList.length; i++){
+      this.mesh = this.meshList[i];
+      this.mesh.rotation.x = sec * (Math.PI / 4) + i*Math.PI/12;
+      this.mesh.rotation.y = sec * (Math.PI / 4) + i*Math.PI/12;
+    }
+
+    this.camera.lookAt( this.scene.position );    
+    this.camera.position.x += ( this.mouse.x - this.camera.position.x ) * .01;
+    this.camera.position.y += ( - this.mouse.y - this.camera.position.y ) * .01;
+
+    this.uniforms.time.value += 0.05;
+  
+    this.renderer.render(this.scene, this.camera);
+
+  }
+
+  mouseMoved(x, y) {
+    this.mouse.x =  x - (this.w / 2);
+    this.mouse.y = -y + (this.h / 2);
+    this.pointLight.position.x += (this.mouse.x - this.pointLight.position.x)*0.05; 
+    this.pointLight.position.y += (this.mouse.y - this.pointLight.position.y)*0.05;
+  }
+
+  scrolled(y) {
+    this.scrollY = y;
+    
+  }
+
+  resized() {
+    this.w = window.innerWidth;
+    this.h = window.innerHeight;
+    this.renderer.setSize(this.w, this.h);
+    this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.camera.aspect = this.w / this.h;
+    this.camera.updateProjectionMatrix();
+    this.uniforms.resolution.value.x = this.renderer.domElement.width;
+    this.uniforms.resolution.value.y = this.renderer.domElement.height;
+  }
+};
+
+class Donuts extends THREE.Mesh {
+  constructor(size,uniform) {
+    const geometry = new THREE.SphereGeometry( size, size, size );
+    const material = new THREE.ShaderMaterial( {
+      uniforms: uniform,
+      vertexShader: document.getElementById( 'vertexShader' ).textContent,
+      fragmentShader: document.getElementById( 'fragmentShader' ).textContent
+    } );
+    //const material = new THREE.MeshBasicMaterial({color: 0x6699FF});
+
+    super(geometry, material);
+  }
+}
+
+function getRandom(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+window.addEventListener('load', function(){
+
+  const canvas = new Canvas();
+  canvas.scrolled(window.scrollY);
+
+
+ 
+  /************************/
+  /*addEventListener*/
+  /************************/
+
+  window.addEventListener('mousemove', e => {
+    canvas.mouseMoved(e.clientX, e.clientY);
+  });
+
+  window.addEventListener('scroll', e => {
+    canvas.scrolled(window.scrollY);
+  });
+
+  window.addEventListener('resize', e => {
+    canvas.resized();
+  });
+
+});
+</script>
